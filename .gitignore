@@ -1,0 +1,5 @@
+app/*.pdf
+app/*.mp3
+app/*.txt
+app/*.wav
+app/piper

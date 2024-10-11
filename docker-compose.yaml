@@ -1,0 +1,18 @@
+services:
+  golang-app:
+    build:
+      context: ./docker/golang
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - environment.yaml
+    volumes:
+      - ./app:/app 
+    networks:
+      - gifservice
+  
+
+networks:
+  gifservice:
+    driver: bridge
