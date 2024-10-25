@@ -10,6 +10,9 @@ COPY . /app
 # Install ffmpeg
 RUN apt-get update && apt-get install -y ffmpeg
 
+# Install dependencies
+RUN apt-get install -y libcairo2-dev libpoppler-glib-dev libcairo2-dev
+
 # RUN apt-get -y install poppler-utils wv unrtf tidy
 
 RUN go mod init go-pdf-to-wav

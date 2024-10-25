@@ -2,3 +2,5 @@ github.com/cheggaaa/go-poppler v0.0.1 h1:dT3r2DzwWrq9m49ED2xeBFx7SAS6vdNwt4gmAsz
 github.com/cheggaaa/go-poppler v0.0.1/go.mod h1:lw99/FtbqY/iD6peEN6rYVfokv0qdEXfAtURmrYVfFE=
 github.com/ungerik/go-cairo v0.0.0-20210317133935-984b32e6bac6 h1:KrKqo3an56mwfObaZtHlyhN+IVDyw1XaoIT5Cr2Ttvk=
 github.com/ungerik/go-cairo v0.0.0-20210317133935-984b32e6bac6/go.mod h1:yLTJg56omDJ+JVxZ5whpCrZgQdaSs+OBdFa+X6ViJcI=
+github.com/ungerik/go-cairo v0.0.0-20240304075741-47de8851d267 h1:KA55kgg61iraQP4wSKIFRHwHIgDqim2Tvh8EXn7Udxw=
+github.com/ungerik/go-cairo v0.0.0-20240304075741-47de8851d267/go.mod h1:yLTJg56omDJ+JVxZ5whpCrZgQdaSs+OBdFa+X6ViJcI=
