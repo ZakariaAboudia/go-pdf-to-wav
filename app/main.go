@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/cheggaaa/go-poppler"
@@ -71,20 +73,26 @@ func joinLines(lines []string) string {
 }
 
 func FFmpeg(inputFile, outputFile string) error {
-	command := fmt.Sprintf("echo \"$(< %s )\" | ./piper/piper --model ./piper/en_US-libritts_r-medium.onnx  --output_file ./%v.wav", inputFile, outputFile)
+	command := fmt.Sprintf("echo \"$(< %s )\" | ./piper/piper --model ./piper/voices/en_US-libritts_r-medium.onnx  --output_file %v.wav", inputFile, outputFile)
 	cmd := exec.Command("bash", "-c", command)
 
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func joinFilePaths(paths []string) string {
-	return filepath.Join(paths...)
+func prepareWavIndexFile() error {
+
+	command := "find /app/voice_chunks/*.wav | sed 's:\\ :\\\\ :g'| sed 's/^/file /' > /app/voice_chunks/voices.txt"
+	cmd := exec.Command("bash", "-c", command)
+
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
-func combineMP3Files(inputFiles []string, outputFile string) error {
-	args := []string{"-i", fmt.Sprintf("concat:%s", joinFilePaths(inputFiles)), "-acodec", "copy", outputFile}
-	cmd := exec.Command("ffmpeg", args...)
+func combineMP3Files(outputFile string) error {
+	command := fmt.Sprintf("ffmpeg -f concat -safe 0 -i /app/voice_chunks/voices.txt -c copy %s", outputFile)
+	cmd := exec.Command("bash", "-c", command)
+
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
@@ -101,14 +109,18 @@ func textToSpeech(inputFile string, outputFile string) error {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxGoroutines)
 
-	tempDir, err := os.MkdirTemp("/app/", "tts_chunks")
+	err = os.Mkdir("tts_chunks", 0775)
 
 	if err != nil {
-		return err
+		log.Panic(err)
 	}
-	defer os.RemoveAll(tempDir)
 
-	var chunkFiles []string
+	err = os.Mkdir("voice_chunks", 0775)
+
+	if err != nil {
+		log.Panic(err)
+	}
+
 	chunkCounter := 0
 
 	for {
@@ -121,12 +133,12 @@ func textToSpeech(inputFile string, outputFile string) error {
 			break
 		}
 
-		chunkFile := filepath.Join(fmt.Sprintf("chunk_%d.txt", chunkCounter))
+		chunkFile := filepath.Join("/app/tts_chunks", fmt.Sprintf("chunk_%d.txt", chunkCounter))
 		chunkCounter++
 
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(lines []string, chunkFile string) {
+		go func(lines []string, chunkFile string, chunkCounter int) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -138,15 +150,13 @@ func textToSpeech(inputFile string, outputFile string) error {
 			}
 
 			// Convert chunk to MP3 using FFmpeg
-			outputMP3 := chunkFile
+			outputMP3 := fmt.Sprintf("/app/voice_chunks/chunk_%d", chunkCounter)
 			err = FFmpeg(chunkFile, outputMP3)
 			if err != nil {
 				fmt.Printf("Error converting chunk to MP3: %v\n", err)
 				return
 			}
-
-			chunkFiles = append(chunkFiles, outputMP3)
-		}(chunk, chunkFile)
+		}(chunk, chunkFile, chunkCounter)
 	}
 
 	wg.Wait()
@@ -155,9 +165,14 @@ func textToSpeech(inputFile string, outputFile string) error {
 		return err
 	}
 
-	return err
+	prepareWavIndexFile()
 
-	// return combineMP3Files(chunkFiles, outputFile)
+	combineMP3Files(outputFile)
+
+	os.RemoveAll("/app/tts_chunks")
+	os.RemoveAll("/app/voice_chunks")
+
+	return err
 
 	// command := fmt.Sprintf("echo %s | ./piper/piper --model ./piper/en_US-libritts_r-medium.onnx  --output_file %s", text, outputFilePath)
 	// // fmt.Println(command)
@@ -172,15 +187,36 @@ func textToSpeech(inputFile string, outputFile string) error {
 	// return nil
 }
 
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
 func main() {
-	filePath := "js-dummies.pdf"
-	textFile, err := readFileLines(filePath, "example.txt")
+
+	fp := flag.String("filepath", "", "path to the pdf file")
+
+	flag.Parse()
+
+	if !isFlagPassed("filepath") {
+		fmt.Println("--filepath flag is required")
+		os.Exit(0)
+	}
+
+	fnString := filepath.Base(strings.Replace(*fp, ".pdf", "", -1))
+	fn := fmt.Sprintf("%s.txt", fnString)
+	textFile, err := readFileLines(*fp, fn)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
 	}
 
-	err = textToSpeech(textFile, filepath.Join("", "output.mp3"))
+	err = textToSpeech(textFile, filepath.Join("", fmt.Sprintf("%s.wav", fnString)))
 	if err != nil {
 		log.Fatal("could not convert to mp3 ", err)
 	}
