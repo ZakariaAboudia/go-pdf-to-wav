@@ -63,19 +63,13 @@ func readFileLines(filePath string, outputFile string) (string, error) {
 	return outputFile, nil
 }
 
-func joinLines(lines []string) string {
-	var result string
-	for _, line := range lines {
-		result += line + "\n"
-	}
-
-	return result
-}
-
-func FFmpeg(inputFile, outputFile string) error {
-	command := fmt.Sprintf("echo \"$(< %s )\" | ./piper/piper --model ./piper/voices/en_US-libritts_r-medium.onnx  --output_file %v.wav", inputFile, outputFile)
-	cmd := exec.Command("bash", "-c", command)
-
+func runPiper(text, outputFile string) error {
+	cmd := exec.Command(
+		"./piper/piper",
+		"--model", "./piper/voices/en_US-libritts_r-medium.onnx",
+		"--output_file", outputFile+".wav",
+	)
+	cmd.Stdin = strings.NewReader(text)
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
@@ -142,18 +136,17 @@ func textToSpeech(inputFile string, outputFile string) error {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			// Write chunk to file
-			err := os.WriteFile(chunkFile, []byte(joinLines(lines)), 0644)
+			text := strings.Join(lines, "\n")
+			err := os.WriteFile(chunkFile, []byte(text), 0644)
 			if err != nil {
 				fmt.Printf("Error writing chunk file: %v\n", err)
 				return
 			}
 
-			// Convert chunk to MP3 using FFmpeg
-			outputMP3 := fmt.Sprintf("/app/voice_chunks/chunk_%d", chunkCounter)
-			err = FFmpeg(chunkFile, outputMP3)
+			outputWav := fmt.Sprintf("/app/voice_chunks/chunk_%d", chunkCounter)
+			err = runPiper(text, outputWav)
 			if err != nil {
-				fmt.Printf("Error converting chunk to MP3: %v\n", err)
+				fmt.Printf("Error converting chunk to wav: %v\n", err)
 				return
 			}
 		}(chunk, chunkFile, chunkCounter)
