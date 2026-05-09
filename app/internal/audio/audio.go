@@ -72,6 +72,11 @@ func Combine(inputs []string, outputFile string) error {
 
 		if i == 0 {
 			hdr = h
+		} else if h.SampleRate != hdr.SampleRate || h.NumChannels != hdr.NumChannels || h.BitsPerSample != hdr.BitsPerSample {
+			r.Close()
+			return fmt.Errorf("chunk %s format mismatch: got %dHz/%dch/%dbit, want %dHz/%dch/%dbit",
+				f, h.SampleRate, h.NumChannels, h.BitsPerSample,
+				hdr.SampleRate, hdr.NumChannels, hdr.BitsPerSample)
 		}
 
 		pcm := make([]byte, h.Subchunk2Size)

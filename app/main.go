@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"pdf-to-wav/internal/convert"
@@ -16,6 +17,7 @@ import (
 func main() {
 	fp := flag.String("filepath", "", "path to the pdf file")
 	voice := flag.String("voice", "./piper/voices/en_US-libritts_r-medium.onnx", "path to piper voice model (.onnx)")
+	workers := flag.Int("workers", max(1, runtime.NumCPU()/2), "number of parallel piper workers")
 	flag.Parse()
 
 	if *fp == "" {
@@ -36,7 +38,7 @@ func main() {
 			ModelPath:  *voice,
 		},
 		ChunkSize:     20,
-		MaxGoroutines: 3,
+		MaxGoroutines: *workers,
 	}
 
 	if err := c.Run(txtFile, fnString+".wav"); err != nil {

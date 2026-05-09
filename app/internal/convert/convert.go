@@ -25,9 +25,6 @@ func (c *Converter) Run(inputFile, outputFile string) error {
 	}
 	defer inFile.Close()
 
-	if err := os.MkdirAll("tts_chunks", 0775); err != nil {
-		return fmt.Errorf("mkdir tts_chunks: %w", err)
-	}
 	if err := os.MkdirAll("voice_chunks", 0775); err != nil {
 		return fmt.Errorf("mkdir voice_chunks: %w", err)
 	}
@@ -49,32 +46,23 @@ func (c *Converter) Run(inputFile, outputFile string) error {
 			break
 		}
 
-		chunkFile := filepath.Join("tts_chunks", fmt.Sprintf("chunk_%d.txt", chunkCounter))
 		outputWav := filepath.Join("voice_chunks", fmt.Sprintf("chunk_%d", chunkCounter))
 		chunkCounter++
 
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(lines []string, chunkFile, outputWav string) {
+		go func(lines []string, outputWav string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
 			text := strings.Join(lines, "\n")
-			if err := os.WriteFile(chunkFile, []byte(text), 0644); err != nil {
-				select {
-				case errCh <- fmt.Errorf("write chunk: %w", err):
-				default:
-				}
-				return
-			}
-
 			if err := c.Piper.Run(text, outputWav); err != nil {
 				select {
-				case errCh <- fmt.Errorf("piper chunk %s: %w", chunkFile, err):
+				case errCh <- fmt.Errorf("piper %s: %w", outputWav, err):
 				default:
 				}
 			}
-		}(chunk, chunkFile, outputWav)
+		}(chunk, outputWav)
 	}
 
 	wg.Wait()
@@ -98,7 +86,6 @@ func (c *Converter) Run(inputFile, outputFile string) error {
 		return fmt.Errorf("combine wav: %w", err)
 	}
 
-	os.RemoveAll("tts_chunks")
 	os.RemoveAll("voice_chunks")
 
 	return nil
