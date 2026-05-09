@@ -201,15 +201,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	fnString := filepath.Base(strings.Replace(*fp, ".pdf", "", -1))
-	fn := fmt.Sprintf("%s.txt", fnString)
-	textFile, err := readFileLines(*fp, fn)
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return
+	fnString := filepath.Base(strings.TrimSuffix(*fp, ".pdf"))
+	txtFile := fnString + ".txt"
+
+	if err := pdf.Extract(*fp, txtFile); err != nil {
+		log.Fatal("read pdf:", err)
 	}
 
-	err = textToSpeech(textFile, filepath.Join("", fmt.Sprintf("%s.wav", fnString)))
+	err := textToSpeech(txtFile, fnString+".wav")
 	if err != nil {
 		log.Fatal("could not convert to mp3 ", err)
 	}
