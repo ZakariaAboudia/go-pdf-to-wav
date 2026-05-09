@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"pdf-to-wav/internal/audio"
 	"pdf-to-wav/internal/pdf"
+	"pdf-to-wav/internal/tts"
 )
 
 const (
@@ -20,17 +20,6 @@ const (
 	maxGoroutines = 3  // Maximum number of goroutines to use
 )
 
-
-func runPiper(text, outputFile string) error {
-	cmd := exec.Command(
-		"./piper/piper",
-		"--model", "./piper/voices/en_US-libritts_r-medium.onnx",
-		"--output_file", outputFile+".wav",
-	)
-	cmd.Stdin = strings.NewReader(text)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
 
 
 func textToSpeech(inputFile string, outputFile string) error {
@@ -86,7 +75,7 @@ func textToSpeech(inputFile string, outputFile string) error {
 				return
 			}
 
-			err = runPiper(text, outputWav)
+			err = tts.Run(text, outputWav)
 			if err != nil {
 				fmt.Printf("Error converting chunk to wav: %v\n", err)
 				return
