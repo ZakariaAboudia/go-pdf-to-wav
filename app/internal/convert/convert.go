@@ -89,11 +89,12 @@ func (c *Converter) Run(inputFile, outputFile string) error {
 	default:
 	}
 
-	if err := audio.BuildWavList("voice_chunks", filepath.Join("voice_chunks", "voices.txt")); err != nil {
-		return fmt.Errorf("build wav list: %w", err)
+	wavFiles, err := audio.ListWavFiles("voice_chunks")
+	if err != nil {
+		return fmt.Errorf("list wav files: %w", err)
 	}
 
-	if err := audio.Combine(filepath.Join("voice_chunks", "voices.txt"), outputFile); err != nil {
+	if err := audio.Combine(wavFiles, outputFile); err != nil {
 		return fmt.Errorf("combine wav: %w", err)
 	}
 

@@ -1,13 +1,31 @@
 package audio
 
 import (
+	"encoding/binary"
+	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 )
+
+type wavHeader struct {
+	ChunkID       [4]byte
+	ChunkSize     uint32
+	Format        [4]byte
+	Subchunk1ID   [4]byte
+	Subchunk1Size uint32
+	AudioFormat   uint16
+	NumChannels   uint16
+	SampleRate    uint32
+	ByteRate      uint32
+	BlockAlign    uint16
+	BitsPerSample uint16
+	Subchunk2ID   [4]byte
+	Subchunk2Size uint32
+}
 
 func chunkIndex(name string) int {
 	name = strings.TrimSuffix(name, ".wav")
@@ -16,36 +34,69 @@ func chunkIndex(name string) int {
 	return n
 }
 
-func BuildWavList(dir, listFile string) error {
+func ListWavFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var wavFiles []string
+	var files []string
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) == ".wav" {
-			wavFiles = append(wavFiles, filepath.Join(dir, e.Name()))
+			files = append(files, filepath.Join(dir, e.Name()))
 		}
 	}
 
-	sort.Slice(wavFiles, func(i, j int) bool {
-		return chunkIndex(filepath.Base(wavFiles[i])) < chunkIndex(filepath.Base(wavFiles[j]))
+	sort.Slice(files, func(i, j int) bool {
+		return chunkIndex(filepath.Base(files[i])) < chunkIndex(filepath.Base(files[j]))
 	})
 
-	var sb strings.Builder
-	for _, f := range wavFiles {
-		sb.WriteString("file " + filepath.Base(f) + "\n")
-	}
-	return os.WriteFile(listFile, []byte(sb.String()), 0644)
+	return files, nil
 }
 
-func Combine(listFile, outputFile string) error {
-	cmd := exec.Command(
-		"ffmpeg", "-f", "concat", "-safe", "0",
-		"-i", listFile,
-		"-c", "copy", outputFile,
-	)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+func Combine(inputs []string, outputFile string) error {
+	var allPCM []byte
+	var hdr wavHeader
+
+	for i, f := range inputs {
+		r, err := os.Open(f)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", f, err)
+		}
+
+		var h wavHeader
+		if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
+			r.Close()
+			return fmt.Errorf("read header %s: %w", f, err)
+		}
+
+		if i == 0 {
+			hdr = h
+		}
+
+		pcm := make([]byte, h.Subchunk2Size)
+		if _, err := io.ReadFull(r, pcm); err != nil {
+			r.Close()
+			return fmt.Errorf("read pcm %s: %w", f, err)
+		}
+		r.Close()
+
+		allPCM = append(allPCM, pcm...)
+	}
+
+	hdr.Subchunk2Size = uint32(len(allPCM))
+	hdr.ChunkSize = 36 + hdr.Subchunk2Size
+
+	out, err := os.Create(outputFile)
+	if err != nil {
+		return fmt.Errorf("create output: %w", err)
+	}
+	defer out.Close()
+
+	if err := binary.Write(out, binary.LittleEndian, hdr); err != nil {
+		return fmt.Errorf("write header: %w", err)
+	}
+
+	_, err = out.Write(allPCM)
+	return err
 }
