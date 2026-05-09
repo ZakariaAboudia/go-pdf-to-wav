@@ -1,17 +1,51 @@
+# go-pdf-to-wav
 
-# Installation
+Converts a PDF file to a WAV audio file using [Piper TTS](https://github.com/rhasspy/piper).
 
-First clone the project :
+Text is extracted from the PDF, split into chunks, and converted to speech in parallel. The resulting WAV chunks are then merged into a single output file.
+
+## Installation
 
 ```bash
-    $ git clone https://github.com/ZakariaAboudia/go-pdf-to-wav.git
-    $ cd go-pdf-to-wav
-    $ sudo docker compose up --build
-    $ docker exec -it go-pdf-to-wav-golang-app-1 bash
-    $ chmod +x get-piper.sh && ./get-piper.sh
+git clone https://github.com/ZakariaAboudia/go-pdf-to-wav.git
+cd go-pdf-to-wav
+sudo docker compose up --build
+docker exec -it go-pdf-to-wav-golang-app-1 bash
 ```
 
-# TODO:
-- Improve the project's folder
-- Present a better way to select pdf files
-- Anything else that will be needed in the future (maybe)
+Inside the container, download Piper and a voice model:
+
+```bash
+chmod +x get-piper.sh && ./get-piper.sh
+mkdir -p piper/voices
+wget -O piper/voices/en_US-libritts_r-medium.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx
+```
+
+Build and run:
+
+```bash
+go build -o app .
+./app --filepath /path/to/document.pdf
+```
+
+## Usage
+
+```
+./app [options]
+
+Options:
+  --filepath   path to the input PDF file (required)
+  --voice      path to the Piper .onnx voice model
+               (default: ./piper/voices/en_US-libritts_r-medium.onnx)
+  --workers    number of parallel Piper processes
+               (default: half the number of CPU cores)
+```
+
+## Example
+
+```bash
+./app --filepath book.pdf --workers 2
+```
+
+Produces `book.wav` in the current directory.
