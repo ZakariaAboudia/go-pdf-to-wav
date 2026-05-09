@@ -11,7 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cheggaaa/go-poppler"
+	"pdf-to-wav/internal/audio"
+	"pdf-to-wav/internal/pdf"
 )
 
 const (
@@ -19,49 +20,6 @@ const (
 	maxGoroutines = 3  // Maximum number of goroutines to use
 )
 
-func readFileLines(filePath string, outputFile string) (string, error) {
-	pdf, err := poppler.Open(filePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer pdf.Close()
-
-	file, err := os.Create(outputFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	w := bufio.NewWriter(file)
-	defer w.Flush()
-
-	pages := pdf.GetNPages()
-	for i := range pages {
-		p := pdf.GetPage(i)
-		c := p.Text()
-		_, err := w.WriteString(c)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// file, err = os.Open("example.txt")
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// defer file.Close()
-
-	// var lines []string
-	// scanner := bufio.NewScanner(file)
-	// for scanner.Scan() {
-	// 	lines = append(lines, scanner.Text())
-	// }
-	// if err := scanner.Err(); err != nil {
-	// 	return nil, err
-	// }
-
-	return outputFile, nil
-}
 
 func runPiper(text, outputFile string) error {
 	cmd := exec.Command(
@@ -74,22 +32,6 @@ func runPiper(text, outputFile string) error {
 	return cmd.Run()
 }
 
-func prepareWavIndexFile() error {
-
-	command := "find /app/voice_chunks/*.wav | sed 's:\\ :\\\\ :g'| sed 's/^/file /' > /app/voice_chunks/voices.txt"
-	cmd := exec.Command("bash", "-c", command)
-
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func combineMP3Files(outputFile string) error {
-	command := fmt.Sprintf("ffmpeg -f concat -safe 0 -i /app/voice_chunks/voices.txt -c copy %s", outputFile)
-	cmd := exec.Command("bash", "-c", command)
-
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
 
 func textToSpeech(inputFile string, outputFile string) error {
 	inFile, err := os.Open(inputFile)
@@ -127,12 +69,13 @@ func textToSpeech(inputFile string, outputFile string) error {
 			break
 		}
 
-		chunkFile := filepath.Join("/app/tts_chunks", fmt.Sprintf("chunk_%d.txt", chunkCounter))
+		chunkFile := filepath.Join("tts_chunks", fmt.Sprintf("chunk_%d.txt", chunkCounter))
+		outputWav := filepath.Join("voice_chunks", fmt.Sprintf("chunk_%d", chunkCounter))
 		chunkCounter++
 
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(lines []string, chunkFile string, chunkCounter int) {
+		go func(lines []string, chunkFile, outputWav string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -143,13 +86,12 @@ func textToSpeech(inputFile string, outputFile string) error {
 				return
 			}
 
-			outputWav := fmt.Sprintf("/app/voice_chunks/chunk_%d", chunkCounter)
 			err = runPiper(text, outputWav)
 			if err != nil {
 				fmt.Printf("Error converting chunk to wav: %v\n", err)
 				return
 			}
-		}(chunk, chunkFile, chunkCounter)
+		}(chunk, chunkFile, outputWav)
 	}
 
 	wg.Wait()
@@ -158,12 +100,12 @@ func textToSpeech(inputFile string, outputFile string) error {
 		return err
 	}
 
-	prepareWavIndexFile()
+	audio.BuildWavList("voice_chunks", filepath.Join("voice_chunks", "voices.txt"))
 
-	combineMP3Files(outputFile)
+	audio.Combine(filepath.Join("voice_chunks", "voices.txt"), outputFile)
 
-	os.RemoveAll("/app/tts_chunks")
-	os.RemoveAll("/app/voice_chunks")
+	os.RemoveAll("tts_chunks")
+	os.RemoveAll("voice_chunks")
 
 	return err
 
