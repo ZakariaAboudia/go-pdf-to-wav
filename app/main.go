@@ -10,6 +10,7 @@ import (
 
 	"pdf-to-wav/internal/convert"
 	"pdf-to-wav/internal/pdf"
+	"pdf-to-wav/internal/tts"
 )
 
 func main() {
@@ -29,7 +30,16 @@ func main() {
 		log.Fatal("read pdf:", err)
 	}
 
-	if err := convert.Run(txtFile, fnString+".wav", *voice); err != nil {
+	c := &convert.Converter{
+		Piper: &tts.Piper{
+			BinaryPath: "./piper/piper",
+			ModelPath:  *voice,
+		},
+		ChunkSize:     20,
+		MaxGoroutines: 3,
+	}
+
+	if err := c.Run(txtFile, fnString+".wav"); err != nil {
 		log.Fatal("convert:", err)
 	}
 }

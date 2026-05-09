@@ -3,7 +3,6 @@ package convert
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,38 +12,36 @@ import (
 	"pdf-to-wav/internal/tts"
 )
 
-const (
-	chunkSize     = 20
-	maxGoroutines = 3
-)
+type Converter struct {
+	Piper         *tts.Piper
+	ChunkSize     int
+	MaxGoroutines int
+}
 
-func Run(inputFile, outputFile, model string) error {
+func (c *Converter) Run(inputFile, outputFile string) error {
 	inFile, err := os.Open(inputFile)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("open input: %w", err)
 	}
 	defer inFile.Close()
 
-	scanner := bufio.NewScanner(inFile)
+	if err := os.MkdirAll("tts_chunks", 0775); err != nil {
+		return fmt.Errorf("mkdir tts_chunks: %w", err)
+	}
+	if err := os.MkdirAll("voice_chunks", 0775); err != nil {
+		return fmt.Errorf("mkdir voice_chunks: %w", err)
+	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxGoroutines)
+	sem := make(chan struct{}, c.MaxGoroutines)
+	errCh := make(chan error, 1)
 
-	err = os.Mkdir("tts_chunks", 0775)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = os.Mkdir("voice_chunks", 0775)
-	if err != nil {
-		log.Panic(err)
-	}
-
+	scanner := bufio.NewScanner(inFile)
 	chunkCounter := 0
 
 	for {
-		chunk := make([]string, 0, chunkSize)
-		for i := 0; i < chunkSize && scanner.Scan(); i++ {
+		chunk := make([]string, 0, c.ChunkSize)
+		for i := 0; i < c.ChunkSize && scanner.Scan(); i++ {
 			chunk = append(chunk, scanner.Text())
 		}
 
@@ -63,16 +60,19 @@ func Run(inputFile, outputFile, model string) error {
 			defer func() { <-sem }()
 
 			text := strings.Join(lines, "\n")
-			err := os.WriteFile(chunkFile, []byte(text), 0644)
-			if err != nil {
-				fmt.Printf("Error writing chunk file: %v\n", err)
+			if err := os.WriteFile(chunkFile, []byte(text), 0644); err != nil {
+				select {
+				case errCh <- fmt.Errorf("write chunk: %w", err):
+				default:
+				}
 				return
 			}
 
-			err = tts.Run(text, outputWav, model)
-			if err != nil {
-				fmt.Printf("Error converting chunk to wav: %v\n", err)
-				return
+			if err := c.Piper.Run(text, outputWav); err != nil {
+				select {
+				case errCh <- fmt.Errorf("piper chunk %s: %w", chunkFile, err):
+				default:
+				}
 			}
 		}(chunk, chunkFile, outputWav)
 	}
@@ -83,12 +83,22 @@ func Run(inputFile, outputFile, model string) error {
 		return err
 	}
 
-	audio.BuildWavList("voice_chunks", filepath.Join("voice_chunks", "voices.txt"))
+	select {
+	case err := <-errCh:
+		return err
+	default:
+	}
 
-	audio.Combine(filepath.Join("voice_chunks", "voices.txt"), outputFile)
+	if err := audio.BuildWavList("voice_chunks", filepath.Join("voice_chunks", "voices.txt")); err != nil {
+		return fmt.Errorf("build wav list: %w", err)
+	}
+
+	if err := audio.Combine(filepath.Join("voice_chunks", "voices.txt"), outputFile); err != nil {
+		return fmt.Errorf("combine wav: %w", err)
+	}
 
 	os.RemoveAll("tts_chunks")
 	os.RemoveAll("voice_chunks")
 
-	return err
+	return nil
 }

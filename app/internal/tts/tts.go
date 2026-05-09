@@ -6,10 +6,15 @@ import (
 	"strings"
 )
 
-func Run(text, outputFile, model string) error {
+type Piper struct {
+	BinaryPath string
+	ModelPath  string
+}
+
+func (p *Piper) Run(text, outputFile string) error {
 	cmd := exec.Command(
-		"./piper/piper",
-		"--model", model,
+		p.BinaryPath,
+		"--model", p.ModelPath,
 		"--output_file", outputFile+".wav",
 	)
 	cmd.Stdin = strings.NewReader(text)
