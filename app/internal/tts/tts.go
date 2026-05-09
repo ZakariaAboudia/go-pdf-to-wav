@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-func Run(text, outputFile string) error {
+func Run(text, outputFile, model string) error {
 	cmd := exec.Command(
 		"./piper/piper",
-		"--model", "./piper/voices/en_US-libritts_r-medium.onnx",
+		"--model", model,
 		"--output_file", outputFile+".wav",
 	)
 	cmd.Stdin = strings.NewReader(text)

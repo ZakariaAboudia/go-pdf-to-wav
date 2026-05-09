@@ -14,6 +14,7 @@ import (
 
 func main() {
 	fp := flag.String("filepath", "", "path to the pdf file")
+	voice := flag.String("voice", "./piper/voices/en_US-libritts_r-medium.onnx", "path to piper voice model (.onnx)")
 	flag.Parse()
 
 	if *fp == "" {
@@ -28,7 +29,7 @@ func main() {
 		log.Fatal("read pdf:", err)
 	}
 
-	if err := convert.Run(txtFile, fnString+".wav"); err != nil {
+	if err := convert.Run(txtFile, fnString+".wav", *voice); err != nil {
 		log.Fatal("convert:", err)
 	}
 }

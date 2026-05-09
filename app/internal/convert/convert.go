@@ -18,7 +18,7 @@ const (
 	maxGoroutines = 3
 )
 
-func Run(inputFile string, outputFile string) error {
+func Run(inputFile, outputFile, model string) error {
 	inFile, err := os.Open(inputFile)
 	if err != nil {
 		log.Fatal(err)
@@ -69,7 +69,7 @@ func Run(inputFile string, outputFile string) error {
 				return
 			}
 
-			err = tts.Run(text, outputWav)
+			err = tts.Run(text, outputWav, model)
 			if err != nil {
 				fmt.Printf("Error converting chunk to wav: %v\n", err)
 				return

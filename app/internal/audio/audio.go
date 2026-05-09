@@ -35,7 +35,7 @@ func BuildWavList(dir, listFile string) error {
 
 	var sb strings.Builder
 	for _, f := range wavFiles {
-		sb.WriteString("file " + f + "\n")
+		sb.WriteString("file " + filepath.Base(f) + "\n")
 	}
 	return os.WriteFile(listFile, []byte(sb.String()), 0644)
 }
